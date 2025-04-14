@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from "sonner"
+import { addMinutes, set, startOfDay, addDays, isPast } from 'date-fns' // Import addDays, isPast
 import {
   Drawer,
   DrawerClose,
@@ -14,22 +15,52 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { createClient } from '@/lib/supabase/client'
 import { useCurrentUserProfile } from '@/hooks/use-current-user-profile' // Assuming this hook exists and provides userId
 
+// Define preset types
+type TimePreset = 'now' | 'lunch' | 'afternoon';
+
+// Utility function to get time ranges
+function getTimeRangeForPreset(preset: TimePreset): { start: Date; end: Date } {
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  let startDate: Date;
+  let endDate: Date;
+
+  switch (preset) {
+    case 'now':
+      startDate = now;
+      endDate = addMinutes(now, 30); // Use the updated 30 min duration
+      break;
+    case 'lunch':
+      startDate = set(todayStart, { hours: 12 });
+      endDate = set(todayStart, { hours: 14 });
+      // Check if today's lunch start time is already past
+      if (isPast(startDate)) {
+        startDate = addDays(startDate, 1); // Move to tomorrow
+        endDate = addDays(endDate, 1);   // Move to tomorrow
+      }
+      break;
+    case 'afternoon':
+      startDate = set(todayStart, { hours: 14 });
+      endDate = set(todayStart, { hours: 18 });
+       // Check if today's afternoon start time is already past
+      if (isPast(startDate)) {
+        startDate = addDays(startDate, 1); // Move to tomorrow
+        endDate = addDays(endDate, 1);   // Move to tomorrow
+      }
+      break;
+  }
+  return { start: startDate, end: endDate };
+}
+
 export function CreateRideDrawer() {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
-  const [timePreference, setTimePreference] = useState<string>('')
+  const [selectedPreset, setSelectedPreset] = useState<TimePreset>('now')
   const [distanceKm, setDistanceKm] = useState<string>('50') // Default distance to '50'
   const [bikeType, setBikeType] = useState<string>('road') // Default bike type to 'road'
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -42,22 +73,26 @@ export function CreateRideDrawer() {
       toast.error("Error: User not logged in.")
       return;
     }
-    if (!timePreference || !distanceKm || !bikeType) {
-       toast.error("Please fill out all fields.");
+    if (!distanceKm || !bikeType) {
+       toast.error("Please fill out distance and bike type.");
        return;
     }
 
     setIsSubmitting(true)
     const toastId = toast.loading("Creating ride...")
 
+    // Calculate start/end times based on preset
+    const { start, end } = getTimeRangeForPreset(selectedPreset);
+
     const { error } = await supabase
       .from('rides')
       .insert({
         creator_id: userId,
-        time_preference: timePreference,
-        distance_km: parseInt(distanceKm, 10), // Convert to number for DB
+        start_time: start.toISOString(), // Convert Date to ISO string for DB
+        end_time: end.toISOString(),     // Convert Date to ISO string for DB
+        preset: selectedPreset,
+        distance_km: parseInt(distanceKm, 10),
         bike_type: bikeType,
-        // status defaults to 'pending' in the database
       })
 
     setIsSubmitting(false)
@@ -68,8 +103,8 @@ export function CreateRideDrawer() {
     } else {
       toast.success("Ride created successfully!", { id: toastId })
       setIsOpen(false) // Close drawer on success
-      // Reset form state if needed
-      setTimePreference('');
+      // Reset form state
+      setSelectedPreset('now'); // Reset preset
       setDistanceKm('50'); // Reset distance to default
       setBikeType('road'); // Reset bike type to default
       router.refresh() // Refresh server data for the current route
@@ -92,20 +127,23 @@ export function CreateRideDrawer() {
           </DrawerDescription>
         </DrawerHeader>
         <div className="px-4 space-y-4">
-          {/* Time Preference */}
-          <div className="space-y-1">
-            <Label htmlFor="time">Time</Label>
-            <Select value={timePreference} onValueChange={setTimePreference} disabled={isSubmitting}>
-              <SelectTrigger id="time">
-                <SelectValue placeholder="Select when you want to ride" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="now">Now</SelectItem>
-                <SelectItem value="morning">Morning</SelectItem>
-                <SelectItem value="lunch">Lunch</SelectItem>
-                <SelectItem value="afternoon">Afternoon</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Time Preset Buttons */}
+          <div className="space-y-2">
+            <Label>When?</Label>
+            <div className="flex gap-2">
+              {(['now', 'lunch', 'afternoon'] as TimePreset[]).map((preset) => (
+                 <Button 
+                    key={preset}
+                    variant={selectedPreset === preset ? 'default' : 'outline'}
+                    onClick={() => setSelectedPreset(preset)}
+                    disabled={isSubmitting}
+                    className="capitalize" // Capitalize button text
+                  >
+                    {preset}
+                 </Button>
+              ))}
+              {/* TODO: Add "Other..." button later */}
+            </div>
           </div>
 
           {/* Distance Toggle Group */}

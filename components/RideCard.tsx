@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { format, addMinutes, differenceInSeconds, isTomorrow } from 'date-fns'
 
 import {
   Card,
@@ -24,7 +25,9 @@ type Participant = { user_id: string; profiles: ProfileMinimal | null };
 type Ride = {
   id: string;
   created_at: string;
-  time_preference: string | null;
+  start_time: string;
+  end_time: string;
+  preset: string | null;
   distance_km: number | null;
   bike_type: string | null;
   status: string;
@@ -46,15 +49,63 @@ export function RideCard({ ride, userId }: RideCardProps) {
   const supabase = createClient();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<string | null>(null); // State for countdown timer
   
-  // Reintroduce optimistic state
+  // Optimistic state for Join/Leave
   const initialHasJoined = ride.ride_participants?.some(p => p.user_id === userId) ?? false;
   const [optimisticHasJoined, setOptimisticHasJoined] = useState(initialHasJoined);
-
+  
   // Sync optimistic state when the underlying prop changes
   useEffect(() => {
     setOptimisticHasJoined(ride.ride_participants?.some(p => p.user_id === userId) ?? false);
   }, [ride.ride_participants, userId]);
+
+  // Countdown Timer Logic for "now" preset
+  useEffect(() => {
+    if (ride.preset !== 'now') {
+      setTimeLeft(null); // Clear timer if not a 'now' ride
+      return; 
+    }
+
+    let intervalId: NodeJS.Timeout | null = null;
+
+    try {
+      const startTime = new Date(ride.start_time);
+      const expirationTime = addMinutes(startTime, 30); // Changed from 90 to 30 minutes
+
+      const updateTimer = () => {
+        const now = new Date();
+        const secondsRemaining = differenceInSeconds(expirationTime, now);
+
+        if (secondsRemaining > 0) {
+          const minutes = Math.floor(secondsRemaining / 60);
+          const seconds = secondsRemaining % 60;
+          setTimeLeft(`${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
+        } else {
+          setTimeLeft("Expired");
+          if (intervalId) clearInterval(intervalId);
+          // Automatically remove if creator and expired
+          if (ride.creator_id === userId && !isDeleting) { 
+            console.log(`Ride ${ride.id} expired, attempting auto-removal.`);
+            handleRemove(true); // Pass flag to skip confirm/toast if needed
+          }
+        }
+      };
+
+      updateTimer(); // Initial update
+      intervalId = setInterval(updateTimer, 1000); // Update every second
+
+    } catch (e) {
+        console.error("Error setting up timer:", e);
+        setTimeLeft("Error"); // Indicate timer error
+    }
+
+    // Cleanup interval on component unmount or ride change
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  // Rerun if ride ID changes or if user becomes/unbecomes creator (for auto-delete logic)
+  }, [ride.id, ride.preset, ride.start_time, userId, isDeleting]); // Added dependencies
 
   // Determine display name and avatar
   const creatorProfile = ride.profiles;
@@ -69,25 +120,60 @@ export function RideCard({ ride, userId }: RideCardProps) {
     return name?.charAt(0).toUpperCase() || '?';
   };
 
-  const handleRemove = async () => {
-    if (!isCreator) return; // Safety check
+  // Format time display (handles presets, timer, and tomorrow)
+  const formatRideTime = () => {
+    // Handle "now" preset timer first
+    if (ride.preset === 'now' && timeLeft && timeLeft !== "Expired" && timeLeft !== "Error") {
+        return `Now – ${timeLeft}`;
+    }
+    if (ride.preset === 'now' && timeLeft) {
+        return timeLeft; // Show "Expired" or "Error"
+    }
+
+    // Handle other presets or custom times
+    try {
+      const startTime = new Date(ride.start_time);
+      const prefix = isTomorrow(startTime) ? "Tomorrow " : "";
+
+      if (ride.preset && ride.preset !== 'custom') {
+        // Display preset text (capitalized) with potential prefix
+        return prefix + ride.preset.charAt(0).toUpperCase() + ride.preset.slice(1);
+      } else {
+        // Fallback for custom times (show HH:mm) with potential prefix
+        return prefix + format(startTime, 'HH:mm'); 
+      }
+    } catch (e) {
+      console.error("Error formatting date:", e);
+      return "Invalid time";
+    }
+  };
+
+  const handleRemove = async (isAutoDelete = false) => {
+    if (!isCreator || isDeleting) return; 
 
     setIsDeleting(true);
-    const toastId = toast.loading("Removing ride...");
+    const toastId = isAutoDelete ? null : toast.loading("Removing ride...");
 
     const { error } = await supabase
       .from('rides')
       .delete()
       .eq('id', ride.id);
 
-    setIsDeleting(false);
+    // Don't set isDeleting false here if auto-deleting, let component unmount
+    if (!isAutoDelete) {
+        setIsDeleting(false);
+    }
 
     if (error) {
       console.error("Error removing ride:", error);
-      toast.error(`Error: ${error.message}`, { id: toastId });
+      if (toastId) toast.error(`Error: ${error.message}`, { id: toastId });
+      // Maybe revert optimistic state if needed for manual deletes, although refresh handles it
     } else {
-      toast.success("Ride removed successfully!", { id: toastId });
-      router.refresh(); // Refresh the page data
+      if (toastId) toast.success("Ride removed successfully!", { id: toastId });
+      // No need to refresh if auto-deleting, as component will likely unmount
+      if (!isAutoDelete) {
+          router.refresh(); 
+      }
     }
   };
 
@@ -129,9 +215,11 @@ export function RideCard({ ride, userId }: RideCardProps) {
   return (
     <Card key={ride.id}>
       <CardHeader>
-        <CardTitle>
-          {displayName} wants to ride
-          <Badge variant="outline" className="ml-2">{ride.time_preference || 'anytime'}</Badge>
+        <CardTitle className="flex justify-between items-center">
+          <span>
+            {displayName} wants to ride
+            <Badge variant="outline" className="ml-2 font-normal">{formatRideTime()}</Badge>
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-row gap-4 h-6 items-center">
@@ -165,9 +253,8 @@ export function RideCard({ ride, userId }: RideCardProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleRemove}
+                onClick={() => handleRemove(false)}
                 disabled={isDeleting}
-                className="ml-2"
               >
                 {isDeleting ? 'Removing...' : 'Remove'}
               </Button>

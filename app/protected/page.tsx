@@ -39,11 +39,13 @@ export default async function ProtectedPage() {
     .select(`
       id,
       created_at,
-      time_preference,
       distance_km,
       bike_type,
       status,
       creator_id,
+      start_time,
+      end_time,
+      preset,
       profiles ( first_name, avatar_url ),
       ride_participants ( user_id, profiles ( id, avatar_url ) )
     `)
