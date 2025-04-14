@@ -4,7 +4,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -24,15 +23,17 @@ export default function NavUser({ user }: NavUserProps) {
   return <div>
     <DropdownMenu>
       {/* Use the user's first name or a fallback */}
-      <DropdownMenuTrigger>
-        <Button variant="ghost" className="h-14"><CurrentUserAvatar className="h-10 w-10 mr-2"/> <span className="font-semibold">{user?.firstName || 'Account'}</span></Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-14"><CurrentUserAvatar className="h-10 w-10 mr-2"/> <span className="font-semibold">{user?.firstName || 'Account'}</span></Button>
+      </DropdownMenuTrigger>
       <DropdownMenuContent>
-        <DropdownMenuLabel>My Account</DropdownMenuLabel>
-        <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link href="/profile">My Profile</Link>
         </DropdownMenuItem>
-        <DropdownMenuItem>Team</DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/team">Team</Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem><LogoutButton /></DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

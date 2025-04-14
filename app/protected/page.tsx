@@ -1,16 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import NavUser from '@/components/nav-user'
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { Button } from '@/components/ui/button'
+import { CreateRideDrawer } from '@/components/create-ride-drawer'
+import { RideCard } from '@/components/RideCard'
 
 export default async function ProtectedPage() {
   const supabase = await createClient()
@@ -41,6 +33,31 @@ export default async function ProtectedPage() {
     firstName: displayName
   };
 
+  // Fetch rides data, joining with profiles and participants
+  const { data: rides, error: ridesError } = await supabase
+    .from('rides')
+    .select(`
+      id,
+      created_at,
+      time_preference,
+      distance_km,
+      bike_type,
+      status,
+      creator_id,
+      profiles ( first_name, avatar_url ),
+      ride_participants ( user_id, profiles ( id, avatar_url ) )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (ridesError) {
+    console.error("Error fetching rides:", ridesError);
+    // Handle error appropriately - maybe show an error message
+    // For now, we'll let it render with an empty rides array or potentially fail
+  }
+
+  // Log the fetched data to the server console
+  console.log("Fetched rides data:", JSON.stringify(rides, null, 2)); 
+
   return (
     <div className="flex-1 w-full flex flex-col gap-6">
       <nav className="w-full h-16 border-b flex justify-between items-center p-4">
@@ -50,22 +67,20 @@ export default async function ProtectedPage() {
         <NavUser user={navUserData} />
       </nav>
         <main className="flex-1 flex flex-col gap-6 w-full p-6 pb-28">
-          <h2 className="font-bold text-4xl mb-4">Rides</h2>
-          <Card>
-            <CardHeader>
-              <CardTitle>Max wants to ride <Badge variant="outline">Now</Badge></CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-row gap-4 h-6">
-              100km <Separator orientation="vertical" />
-              100km <Separator orientation="vertical" />
-              100km
-            </CardContent>
-            <CardFooter>
-              <Button variant="outline">Join</Button>
-            </CardFooter>
-          </Card>
+          <h2 className="font-bold text-4xl mb-4">Available Rides</h2>
+          {/* Map over fetched rides and render RideCard */}
+          {rides && rides.length > 0 ? (
+            rides.map((ride) => (
+              // Pass ride data and logged-in user ID to RideCard
+              // Use 'as any' to bypass persistent TS inference issue
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              <RideCard key={ride.id} ride={ride as any} userId={user.id} />
+            ))
+          ) : (
+            <p className="text-center text-muted-foreground">No rides available right now. Create one!</p>
+          )}
         </main>
-         <Button className="sticky bottom-0 m-10">Create ride</Button>
+         <CreateRideDrawer />
     </div>
   )
 }
