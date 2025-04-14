@@ -62,7 +62,7 @@ export default async function ProtectedPage() {
     <div className="flex-1 w-full flex flex-col gap-6">
       <nav className="w-full h-16 border-b flex justify-between items-center p-4">
         <div className="flex-grow">
-        <div className="text-lg font-semibold">Oberland Riding</div>
+        <div className="text-lg font-semibold">Upperland Racing</div>
         </div>
         <NavUser user={navUserData} />
       </nav>

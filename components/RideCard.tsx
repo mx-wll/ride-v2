@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -45,7 +45,16 @@ export function RideCard({ ride, userId }: RideCardProps) {
   const router = useRouter();
   const supabase = createClient();
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isJoining, setIsJoining] = useState(false); // State for joining/leaving
+  const [isJoining, setIsJoining] = useState(false);
+  
+  // Reintroduce optimistic state
+  const initialHasJoined = ride.ride_participants?.some(p => p.user_id === userId) ?? false;
+  const [optimisticHasJoined, setOptimisticHasJoined] = useState(initialHasJoined);
+
+  // Sync optimistic state when the underlying prop changes
+  useEffect(() => {
+    setOptimisticHasJoined(ride.ride_participants?.some(p => p.user_id === userId) ?? false);
+  }, [ride.ride_participants, userId]);
 
   // Determine display name and avatar
   const creatorProfile = ride.profiles;
@@ -54,7 +63,6 @@ export function RideCard({ ride, userId }: RideCardProps) {
 
   const participants = ride.ride_participants || [];
   const isCreator = ride.creator_id === userId;
-  const hasJoined = participants.some(p => p.user_id === userId);
 
   // Function to get initials for fallback avatar
   const getInitials = (name: string | null | undefined) => {
@@ -84,32 +92,38 @@ export function RideCard({ ride, userId }: RideCardProps) {
   };
 
   const handleJoinLeave = async () => {
+    if (isCreator || isJoining) return;
+
+    const originalHasJoined = optimisticHasJoined; // Store original state for potential revert
     setIsJoining(true);
-    const toastId = toast.loading(hasJoined ? "Leaving ride..." : "Joining ride...");
+    setOptimisticHasJoined(!originalHasJoined); // Optimistically update UI *before* API call
+
+    const toastId = toast.loading(originalHasJoined ? "Leaving ride..." : "Joining ride...");
 
     let error = null;
-    if (hasJoined) {
-      // Leave the ride
+    if (originalHasJoined) {
+      // Leave action
       ({ error } = await supabase
         .from('ride_participants')
         .delete()
         .match({ ride_id: ride.id, user_id: userId }));
     } else {
-      // Join the ride
+      // Join action
       ({ error } = await supabase
         .from('ride_participants')
         .insert({ ride_id: ride.id, user_id: userId }));
     }
 
-    setIsJoining(false);
-
     if (error) {
       console.error("Error joining/leaving ride:", error);
       toast.error(`Error: ${error.message}`, { id: toastId });
+      setOptimisticHasJoined(originalHasJoined); // Revert optimistic state ONLY on error
     } else {
-      toast.success(hasJoined ? "Left ride successfully!" : "Joined ride successfully!", { id: toastId });
-      router.refresh(); // Refresh the page data
+      toast.success(originalHasJoined ? "Left ride successfully!" : "Joined ride successfully!", { id: toastId });
+      router.refresh(); // Refresh data in background
     }
+    
+    setIsJoining(false); // Loading finished
   };
 
   return (
@@ -160,12 +174,12 @@ export function RideCard({ ride, userId }: RideCardProps) {
             </>
           ) : (
             <Button 
-              variant={hasJoined ? "outline" : "default"} 
+              variant={optimisticHasJoined ? "outline" : "default"}
               size="sm" 
               onClick={handleJoinLeave}
               disabled={isJoining}
             >
-              {isJoining ? (hasJoined ? 'Leaving...' : 'Joining...') : (hasJoined ? 'Leave' : 'Join')}
+              {optimisticHasJoined ? 'Leave' : 'Join'}
             </Button>
           )}
         </div>

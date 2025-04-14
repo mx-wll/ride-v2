@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { createClient } from '@/lib/supabase/client'
 import { useCurrentUserProfile } from '@/hooks/use-current-user-profile' // Assuming this hook exists and provides userId
 
@@ -29,8 +30,8 @@ export function CreateRideDrawer() {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [timePreference, setTimePreference] = useState<string>('')
-  const [distanceKm, setDistanceKm] = useState<string>('') // Use string initially for Select value
-  const [bikeType, setBikeType] = useState<string>('')
+  const [distanceKm, setDistanceKm] = useState<string>('50') // Default distance to '50'
+  const [bikeType, setBikeType] = useState<string>('road') // Default bike type to 'road'
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const supabase = createClient()
@@ -69,8 +70,8 @@ export function CreateRideDrawer() {
       setIsOpen(false) // Close drawer on success
       // Reset form state if needed
       setTimePreference('');
-      setDistanceKm('');
-      setBikeType('');
+      setDistanceKm('50'); // Reset distance to default
+      setBikeType('road'); // Reset bike type to default
       router.refresh() // Refresh server data for the current route
     }
   }
@@ -79,7 +80,9 @@ export function CreateRideDrawer() {
     <Drawer open={isOpen} onOpenChange={setIsOpen}>
       <DrawerTrigger asChild>
         {/* This button replaces the one in protected/page.tsx */}
-        <Button className="sticky bottom-0 m-10">Create ride</Button>
+        <div className="bg-white sticky bottom-0 p-6 pb-10">
+          <Button className="w-full font-bold italic">Create ride</Button>
+        </div>
       </DrawerTrigger>
       <DrawerContent>
         <DrawerHeader className="text-left">
@@ -105,38 +108,50 @@ export function CreateRideDrawer() {
             </Select>
           </div>
 
-          {/* Distance */}
-           <div className="space-y-1">
+          {/* Distance Toggle Group */}
+          <div className="space-y-2"> {/* Adjusted spacing */} 
             <Label htmlFor="distance">Distance</Label>
-            <Select value={distanceKm} onValueChange={setDistanceKm} disabled={isSubmitting}>
-              <SelectTrigger id="distance">
-                <SelectValue placeholder="Select ride distance" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="30">30 km</SelectItem>
-                <SelectItem value="50">50 km</SelectItem>
-                <SelectItem value="100">100 km</SelectItem>
-              </SelectContent>
-            </Select>
+            <ToggleGroup 
+              type="single" 
+              value={distanceKm} 
+              onValueChange={(value) => {
+                // Ensure a value is always selected, prevent deselection
+                if (value) {
+                  setDistanceKm(value);
+                }
+              }}
+              className="justify-start" // Align toggles left
+              disabled={isSubmitting}
+            >
+              <ToggleGroupItem value="30" aria-label="Toggle 30km">30 km</ToggleGroupItem>
+              <ToggleGroupItem value="50" aria-label="Toggle 50km">50 km</ToggleGroupItem>
+              <ToggleGroupItem value="100" aria-label="Toggle 100km">100 km</ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
-          {/* Bike Type */}
-           <div className="space-y-1">
+          {/* Bike Type Toggle Group */}
+           <div className="space-y-2">
             <Label htmlFor="bike">Bike</Label>
-            <Select value={bikeType} onValueChange={setBikeType} disabled={isSubmitting}>
-              <SelectTrigger id="bike">
-                <SelectValue placeholder="Select bike type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="road">Road</SelectItem>
-                <SelectItem value="mtb">MTB</SelectItem>
-              </SelectContent>
-            </Select>
+            <ToggleGroup 
+              type="single" 
+              value={bikeType} 
+              onValueChange={(value) => {
+                // Ensure a value is always selected, prevent deselection
+                if (value) {
+                  setBikeType(value);
+                }
+              }}
+              className="justify-start"
+              disabled={isSubmitting}
+            >
+              <ToggleGroupItem value="road" aria-label="Toggle Road bike">Road</ToggleGroupItem>
+              <ToggleGroupItem value="mtb" aria-label="Toggle Mountain bike">MTB</ToggleGroupItem>
+            </ToggleGroup>
           </div>
         </div>
         <DrawerFooter className="pt-4">
-          <Button onClick={handleCreateRide} disabled={isSubmitting}>
-            {isSubmitting ? "Creating..." : "Create Ride"}
+          <Button className="font-bold italic" onClick={handleCreateRide} disabled={isSubmitting}>
+            {isSubmitting ? "Creating..." : "Let's Go"}
           </Button>
           <DrawerClose asChild>
             <Button variant="outline">Cancel</Button>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCurrentUserProfile } from '@/hooks/use-current-user-profile'
 import { Input } from '@/components/ui/input'
@@ -10,15 +11,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Loader2 } from 'lucide-react'
 import { FileUploadDemo } from '@/components/file-upload-demo'
 import { CurrentUserAvatar } from '@/components/current-user-avatar'
+import { toast } from "sonner"
 
 export const ProfileForm = () => {
+  const router = useRouter()
   const { profile, userId, loading: profileLoading, error: profileError } = useCurrentUserProfile();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [socialMediaUrl, setSocialMediaUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const supabase = createClient();
 
   // Update local state when profile data is loaded or changes
@@ -39,7 +41,7 @@ export const ProfileForm = () => {
 
     setIsSaving(true);
     setSaveError(null);
-    setSaveSuccess(false);
+    const toastId = toast.loading("Saving profile...");
 
     console.log(`Saving profile for user: ${userId}`);
     const { error: updateError } = await supabase
@@ -52,18 +54,15 @@ export const ProfileForm = () => {
       })
       .eq('id', userId);
 
-    setIsSaving(false);
-
     if (updateError) {
       console.error('Error updating profile:', updateError);
+      toast.error(`Error: ${updateError.message}`, { id: toastId });
       setSaveError(updateError.message);
-      setSaveSuccess(false);
+      setIsSaving(false);
     } else {
       console.log('Profile updated successfully.');
-      setSaveSuccess(true);
-      // Optionally refetch or rely on realtime update from hook
-      // Clear success message after a delay
-      setTimeout(() => setSaveSuccess(false), 3000);
+      toast.success("Profile saved successfully!", { id: toastId });
+      router.push('/protected');
     }
   };
 
@@ -97,7 +96,7 @@ export const ProfileForm = () => {
     <Card className="w-full max-w-md">
       <form onSubmit={handleSave}>
         <CardHeader>
-          <CardTitle>Edit your Profile</CardTitle>
+          <CardTitle>Your Profile</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -144,9 +143,8 @@ export const ProfileForm = () => {
         <CardFooter className="flex justify-between items-center">
           <div>
             {saveError && <p className="text-sm text-destructive">Error: {saveError}</p>}
-            {saveSuccess && <p className="text-sm text-primary">Profile saved successfully!</p>}
           </div>
-          <Button type="submit" disabled={isSaving || profileLoading}>
+          <Button className="w-full mt-4 " type="submit" disabled={isSaving || profileLoading}>
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
