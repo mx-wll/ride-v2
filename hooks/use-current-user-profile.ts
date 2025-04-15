@@ -8,6 +8,7 @@ export interface UserProfile {
   lastName: string | null;
   socialMediaUrl: string | null;
   onboardingCompleted: boolean | null;
+  avatarUrl: string | null;
 }
 
 export const useCurrentUserProfile = () => {
@@ -23,7 +24,7 @@ export const useCurrentUserProfile = () => {
     console.log(`Fetching profile for user: ${currentUserId}`);
     const { data, error: fetchError } = await supabase
       .from('profiles')
-      .select('first_name, last_name, social_media_url, onboarding_completed')
+      .select('first_name, last_name, social_media_url, onboarding_completed, avatar_url')
       .eq('id', currentUserId)
       .maybeSingle();
 
@@ -37,7 +38,8 @@ export const useCurrentUserProfile = () => {
         firstName: data.first_name, 
         lastName: data.last_name, 
         socialMediaUrl: data.social_media_url,
-        onboardingCompleted: data.onboarding_completed
+        onboardingCompleted: data.onboarding_completed,
+        avatarUrl: data.avatar_url
       });
     } else {
       console.log('No profile data found for user.');
@@ -77,7 +79,8 @@ export const useCurrentUserProfile = () => {
                  firstName: profile?.firstName ?? null, 
                  lastName: profile?.lastName ?? null,
                  socialMediaUrl: profile?.socialMediaUrl ?? null,
-                 onboardingCompleted: profile?.onboardingCompleted ?? null
+                 onboardingCompleted: profile?.onboardingCompleted ?? null,
+                 avatarUrl: profile?.avatarUrl ?? null
               }; 
               let changed = false;
               if ('first_name' in payload.new && payload.new.first_name !== profile?.firstName) {
@@ -95,6 +98,10 @@ export const useCurrentUserProfile = () => {
               if ('onboarding_completed' in payload.new && payload.new.onboarding_completed !== profile?.onboardingCompleted) {
                  newProfile.onboardingCompleted = payload.new.onboarding_completed;
                  changed = true;
+              }
+              if ('avatar_url' in payload.new && payload.new.avatar_url !== profile?.avatarUrl) {
+                newProfile.avatarUrl = payload.new.avatar_url;
+                changed = true;
               }
 
               if (changed) {

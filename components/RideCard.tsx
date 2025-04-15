@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+// import { useRouter } from 'next/navigation' // Remove unused import
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { format, addMinutes, differenceInSeconds, isTomorrow } from 'date-fns'
-import { LocateFixed } from 'lucide-react'
 
 import {
   Card,
@@ -23,7 +22,8 @@ import { Separator } from '@/components/ui/separator'
 type ProfileMinimal = { id: string; avatar_url: string | null };
 type Participant = { user_id: string; profiles: ProfileMinimal | null };
 
-type Ride = {
+// Export the Ride type
+export type Ride = {
   id: string;
   created_at: string;
   start_time: string;
@@ -33,21 +33,28 @@ type Ride = {
   bike_type: string | null;
   status: string;
   creator_id: string;
-  starting_point: string | null;
+  starting_point_address: string | null;
+  starting_point_coords: string | null;
   profiles: { first_name: string | null; avatar_url: string | null } | null; // Creator profile
   ride_participants: Participant[]; // List of participants
 };
 
 interface RideCardProps {
   ride: Ride;
-  userId: string; // ID of the currently logged-in user
+  userId: string;
+  // currentUserProfile: ProfileMinimal; // Remove unused prop
+  onRideRemoved: (rideId: string) => void; 
+  onParticipantChange: (rideId: string, action: 'join' | 'leave') => void; // Add participant change callback
 }
 
-export function RideCard({ ride, userId }: RideCardProps) {
-  // Log the received ride prop in the browser console
-  console.log('[RideCard] Received ride prop:', ride);
-
-  const router = useRouter();
+export function RideCard({ 
+  ride, 
+  userId, 
+  // currentUserProfile, // Remove unused prop
+  onRideRemoved, 
+  onParticipantChange // Destructure
+}: RideCardProps) {
+  // const router = useRouter(); // Remove unused hook call
   const supabase = createClient();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -174,7 +181,7 @@ export function RideCard({ ride, userId }: RideCardProps) {
       if (toastId) toast.success("Ride removed successfully!", { id: toastId });
       // No need to refresh if auto-deleting, as component will likely unmount
       if (!isAutoDelete) {
-          router.refresh(); 
+          onRideRemoved(ride.id);
       }
     }
   };
@@ -182,9 +189,10 @@ export function RideCard({ ride, userId }: RideCardProps) {
   const handleJoinLeave = async () => {
     if (isCreator || isJoining) return;
 
-    const originalHasJoined = optimisticHasJoined; // Store original state for potential revert
+    const originalHasJoined = optimisticHasJoined;
+
     setIsJoining(true);
-    setOptimisticHasJoined(!originalHasJoined); // Optimistically update UI *before* API call
+    setOptimisticHasJoined(!originalHasJoined);
 
     const toastId = toast.loading(originalHasJoined ? "Leaving ride..." : "Joining ride...");
 
@@ -205,13 +213,14 @@ export function RideCard({ ride, userId }: RideCardProps) {
     if (error) {
       console.error("Error joining/leaving ride:", error);
       toast.error(`Error: ${error.message}`, { id: toastId });
-      setOptimisticHasJoined(originalHasJoined); // Revert optimistic state ONLY on error
+      setOptimisticHasJoined(originalHasJoined);
     } else {
       toast.success(originalHasJoined ? "Left ride successfully!" : "Joined ride successfully!", { id: toastId });
-      router.refresh(); // Refresh data in background
+      // Call the callback to update parent state
+      onParticipantChange(ride.id, originalHasJoined ? 'leave' : 'join');
     }
     
-    setIsJoining(false); // Loading finished
+    setIsJoining(false);
   };
 
   return (
@@ -227,17 +236,14 @@ export function RideCard({ ride, userId }: RideCardProps) {
       <CardContent className="flex flex-col gap-2">
          {/* Row for Distance / Bike Type */}
         <div className="flex flex-row gap-4 h-6 items-center text-sm text-muted-foreground">
+            {ride.starting_point_address && (
+                    <span>{ride.starting_point_address}</span>
+                  )}        
+                  <Separator orientation="vertical" />
             <span>{ride.distance_km || '?'} km</span>
             <Separator orientation="vertical" />
             <span>{ride.bike_type || 'Any bike'}</span>
-        </div>
-        {/* Row for Starting Point (only if it exists) */}
-        {ride.starting_point && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <LocateFixed className="h-4 w-4" /> 
-                <span>{ride.starting_point}</span>
-            </div>
-        )}
+          </div>
       </CardContent>
       <CardFooter className="flex justify-between items-center gap-2">
         {/* Left side: Avatars */}
