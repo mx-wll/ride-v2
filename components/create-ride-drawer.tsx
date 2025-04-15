@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from "sonner"
 import { addMinutes, set, startOfDay, addDays, isPast } from 'date-fns' // Import addDays, isPast
+import { LocateFixed, Loader2 } from 'lucide-react' // Import icons
 import {
   Drawer,
   DrawerClose,
@@ -15,7 +16,7 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { createClient } from '@/lib/supabase/client'
 import { useCurrentUserProfile } from '@/hooks/use-current-user-profile' // Assuming this hook exists and provides userId
@@ -60,21 +61,59 @@ function getTimeRangeForPreset(preset: TimePreset): { start: Date; end: Date } {
 export function CreateRideDrawer() {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
-  const [selectedPreset, setSelectedPreset] = useState<TimePreset>('now')
+  const [selectedPreset, setSelectedPreset] = useState<TimePreset | string>('now') // Allow string for potential custom value later
   const [distanceKm, setDistanceKm] = useState<string>('50') // Default distance to '50'
   const [bikeType, setBikeType] = useState<string>('road') // Default bike type to 'road'
+  const [startingPoint, setStartingPoint] = useState<string>('') // State for starting point
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false) // State for location fetching
 
   const supabase = createClient()
   const { userId } = useCurrentUserProfile() // Get userId from the hook
+
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setIsFetchingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const locationString = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        setStartingPoint(locationString);
+        toast.success('Current location fetched!');
+        setIsFetchingLocation(false);
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        let message = 'Could not fetch location.';
+        if (error.code === error.PERMISSION_DENIED) {
+          message = 'Location permission denied. Please enable it in your browser settings.';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          message = 'Location information is unavailable.';
+        } else if (error.code === error.TIMEOUT) {
+          message = 'Location request timed out.';
+        }
+        toast.error(message);
+        setIsFetchingLocation(false);
+      },
+      {
+        enableHighAccuracy: true, // Request more accurate position
+        timeout: 10000, // 10 seconds timeout
+        maximumAge: 0 // Don't use cached position
+      }
+    );
+  };
 
   const handleCreateRide = async () => {
     if (!userId) {
       toast.error("Error: User not logged in.")
       return;
     }
-    if (!distanceKm || !bikeType) {
-       toast.error("Please fill out distance and bike type.");
+    if (!distanceKm || !bikeType || !startingPoint) {
+       toast.error("Please fill out time, distance, bike type, and starting point.");
        return;
     }
 
@@ -82,7 +121,7 @@ export function CreateRideDrawer() {
     const toastId = toast.loading("Creating ride...")
 
     // Calculate start/end times based on preset
-    const { start, end } = getTimeRangeForPreset(selectedPreset);
+    const { start, end } = getTimeRangeForPreset(selectedPreset as TimePreset);
 
     const { error } = await supabase
       .from('rides')
@@ -93,6 +132,7 @@ export function CreateRideDrawer() {
         preset: selectedPreset,
         distance_km: parseInt(distanceKm, 10),
         bike_type: bikeType,
+        starting_point: startingPoint, // Add starting point to insert data
       })
 
     setIsSubmitting(false)
@@ -103,10 +143,11 @@ export function CreateRideDrawer() {
     } else {
       toast.success("Ride created successfully!", { id: toastId })
       setIsOpen(false) // Close drawer on success
-      // Reset form state
+      // Reset form state, including starting point
       setSelectedPreset('now'); // Reset preset
       setDistanceKm('50'); // Reset distance to default
       setBikeType('road'); // Reset bike type to default
+      setStartingPoint(''); // Reset starting point
       router.refresh() // Refresh server data for the current route
     }
   }
@@ -127,38 +168,67 @@ export function CreateRideDrawer() {
           </DrawerDescription>
         </DrawerHeader>
         <div className="px-4 space-y-4">
-          {/* Time Preset Buttons */}
+          {/* Starting Point Input */} 
           <div className="space-y-2">
-            <Label>When?</Label>
-            <div className="flex gap-2">
-              {(['now', 'lunch', 'afternoon'] as TimePreset[]).map((preset) => (
-                 <Button 
-                    key={preset}
-                    variant={selectedPreset === preset ? 'default' : 'outline'}
-                    onClick={() => setSelectedPreset(preset)}
-                    disabled={isSubmitting}
-                    className="capitalize" // Capitalize button text
-                  >
-                    {preset}
+            <div className="relative">
+                <Input
+                    id="starting-point"
+                    placeholder="Enter starting address or use current location"
+                    value={startingPoint}
+                    onChange={(e) => setStartingPoint(e.target.value)}
+                    disabled={isSubmitting || isFetchingLocation}
+                    className="pr-10" // Add padding for the button
+                 />
+                 <Button
+                     type="button"
+                     variant="ghost"
+                     size="icon"
+                     className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary"
+                     onClick={handleGetCurrentLocation}
+                     disabled={isSubmitting || isFetchingLocation}
+                     aria-label="Get current location"
+                 >
+                     {isFetchingLocation ? (
+                         <Loader2 className="h-4 w-4 animate-spin" />
+                     ) : (
+                         <LocateFixed className="h-4 w-4" />
+                     )}
                  </Button>
-              ))}
-              {/* TODO: Add "Other..." button later */}
             </div>
+           </div>
+
+          {/* Time Preset Toggle Group */} 
+          <div className="space-y-2">
+            <ToggleGroup 
+              id="time-preset"
+              type="single" 
+              value={selectedPreset} 
+              onValueChange={(value) => {
+                if (value) {
+                  setSelectedPreset(value as TimePreset); // Cast to TimePreset
+                }
+              }}
+              className="w-full grid grid-cols-3" // Use grid for equal width items, full width
+              disabled={isSubmitting}
+            >
+              <ToggleGroupItem value="now" aria-label="Toggle Now">Now</ToggleGroupItem>
+              <ToggleGroupItem value="lunch" aria-label="Toggle Lunch">Lunch</ToggleGroupItem>
+              <ToggleGroupItem value="afternoon" aria-label="Toggle Afternoon">Afternoon</ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
-          {/* Distance Toggle Group */}
-          <div className="space-y-2"> {/* Adjusted spacing */} 
-            <Label htmlFor="distance">Distance</Label>
+          {/* Distance Toggle Group */} 
+          <div className="space-y-2">
             <ToggleGroup 
+              id="distance"
               type="single" 
               value={distanceKm} 
               onValueChange={(value) => {
-                // Ensure a value is always selected, prevent deselection
                 if (value) {
                   setDistanceKm(value);
                 }
               }}
-              className="justify-start" // Align toggles left
+              className="w-full grid grid-cols-3" // Use grid for equal width items, full width
               disabled={isSubmitting}
             >
               <ToggleGroupItem value="30" aria-label="Toggle 30km">30 km</ToggleGroupItem>
@@ -167,19 +237,18 @@ export function CreateRideDrawer() {
             </ToggleGroup>
           </div>
 
-          {/* Bike Type Toggle Group */}
+          {/* Bike Type Toggle Group */} 
            <div className="space-y-2">
-            <Label htmlFor="bike">Bike</Label>
             <ToggleGroup 
+              id="bike"
               type="single" 
               value={bikeType} 
               onValueChange={(value) => {
-                // Ensure a value is always selected, prevent deselection
                 if (value) {
                   setBikeType(value);
                 }
               }}
-              className="justify-start"
+              className="w-full grid grid-cols-2" // Use grid for equal width items, full width
               disabled={isSubmitting}
             >
               <ToggleGroupItem value="road" aria-label="Toggle Road bike">Road</ToggleGroupItem>

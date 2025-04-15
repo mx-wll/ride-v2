@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { format, addMinutes, differenceInSeconds, isTomorrow } from 'date-fns'
+import { LocateFixed } from 'lucide-react'
 
 import {
   Card,
@@ -32,6 +33,7 @@ type Ride = {
   bike_type: string | null;
   status: string;
   creator_id: string;
+  starting_point: string | null;
   profiles: { first_name: string | null; avatar_url: string | null } | null; // Creator profile
   ride_participants: Participant[]; // List of participants
 };
@@ -222,10 +224,20 @@ export function RideCard({ ride, userId }: RideCardProps) {
           </span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-row gap-4 h-6 items-center">
-        <span>{ride.distance_km || '?'} km</span>
-        <Separator orientation="vertical" />
-        <span>{ride.bike_type || 'Any bike'}</span>
+      <CardContent className="flex flex-col gap-2">
+         {/* Row for Distance / Bike Type */}
+        <div className="flex flex-row gap-4 h-6 items-center text-sm text-muted-foreground">
+            <span>{ride.distance_km || '?'} km</span>
+            <Separator orientation="vertical" />
+            <span>{ride.bike_type || 'Any bike'}</span>
+        </div>
+        {/* Row for Starting Point (only if it exists) */}
+        {ride.starting_point && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <LocateFixed className="h-4 w-4" /> 
+                <span>{ride.starting_point}</span>
+            </div>
+        )}
       </CardContent>
       <CardFooter className="flex justify-between items-center gap-2">
         {/* Left side: Avatars */}

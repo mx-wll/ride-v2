@@ -7,6 +7,7 @@ export interface UserProfile {
   firstName: string | null;
   lastName: string | null;
   socialMediaUrl: string | null;
+  onboardingCompleted: boolean | null;
 }
 
 export const useCurrentUserProfile = () => {
@@ -22,7 +23,7 @@ export const useCurrentUserProfile = () => {
     console.log(`Fetching profile for user: ${currentUserId}`);
     const { data, error: fetchError } = await supabase
       .from('profiles')
-      .select('first_name, last_name, social_media_url')
+      .select('first_name, last_name, social_media_url, onboarding_completed')
       .eq('id', currentUserId)
       .maybeSingle();
 
@@ -35,7 +36,8 @@ export const useCurrentUserProfile = () => {
       setProfile({ 
         firstName: data.first_name, 
         lastName: data.last_name, 
-        socialMediaUrl: data.social_media_url
+        socialMediaUrl: data.social_media_url,
+        onboardingCompleted: data.onboarding_completed
       });
     } else {
       console.log('No profile data found for user.');
@@ -74,7 +76,8 @@ export const useCurrentUserProfile = () => {
               const newProfile: UserProfile = { 
                  firstName: profile?.firstName ?? null, 
                  lastName: profile?.lastName ?? null,
-                 socialMediaUrl: profile?.socialMediaUrl ?? null 
+                 socialMediaUrl: profile?.socialMediaUrl ?? null,
+                 onboardingCompleted: profile?.onboardingCompleted ?? null
               }; 
               let changed = false;
               if ('first_name' in payload.new && payload.new.first_name !== profile?.firstName) {
@@ -85,11 +88,15 @@ export const useCurrentUserProfile = () => {
                 newProfile.lastName = payload.new.last_name;
                 changed = true;
               }
-              // Check and update social media URL from realtime
               if ('social_media_url' in payload.new && payload.new.social_media_url !== profile?.socialMediaUrl) {
                 newProfile.socialMediaUrl = payload.new.social_media_url;
                 changed = true;
               }
+              if ('onboarding_completed' in payload.new && payload.new.onboarding_completed !== profile?.onboardingCompleted) {
+                 newProfile.onboardingCompleted = payload.new.onboarding_completed;
+                 changed = true;
+              }
+
               if (changed) {
                 console.log('Updating profile state from realtime:', newProfile);
                 setProfile(newProfile);
@@ -112,7 +119,7 @@ export const useCurrentUserProfile = () => {
         supabase.removeChannel(channel);
       }
     };
-  }, [supabase, fetchProfile]); // Include fetchProfile
+  }, [supabase]);
 
   // Add userId to the return object
   return { profile, userId, loading, error, fetchProfile };

@@ -46,6 +46,7 @@ export default async function ProtectedPage() {
       start_time,
       end_time,
       preset,
+      starting_point,
       profiles ( first_name, avatar_url ),
       ride_participants ( user_id, profiles ( id, avatar_url ) )
     `)
