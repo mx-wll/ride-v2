@@ -1,6 +1,6 @@
 'use client'
 
-import { OnboardingForm } from '@/components/onboarding-form'
+import { OnboardingForm } from '@/features/profile/components/onboarding-form'
 
 // This page will be protected by middleware, ensuring only authenticated users
 // who haven't completed onboarding can access it.

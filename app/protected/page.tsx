@@ -1,20 +1,20 @@
 'use client' // Need client component for state and dynamic import
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client' // Use client for stateful page
+import { createClient } from '@/shared/supabase/client' // Use client for stateful page
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js' // Import User type
-import NavUser from '@/components/nav-user'
-import { CreateRideDrawer } from '@/components/create-ride-drawer'
-import { RideCard, Ride } from '@/components/RideCard' // Import Ride type
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
+import NavUser from '@/features/profile/components/nav-user'
+import { CreateRideDrawer } from '@/features/rides/components/create-ride-drawer'
+import { RideCard, Ride } from '@/features/rides/components/RideCard' // Import Ride type
+import { Switch } from "@/shared/components/ui/switch"
+import { Label } from "@/shared/components/ui/label"
 import dynamic from 'next/dynamic'
 import { Loader2 } from 'lucide-react'
-import { useCurrentUserProfile } from '@/hooks/use-current-user-profile' // Import hook
+import { useCurrentUserProfile } from '@/features/profile/hooks/use-current-user-profile' // Import hook
 
 // Dynamically import MapView with SSR disabled
-const MapView = dynamic(() => import('@/components/map-view'), {
+const MapView = dynamic(() => import('@/features/rides/components/map-view'), {
     ssr: false,
     loading: () => (
         <div className="flex justify-center items-center h-96">
